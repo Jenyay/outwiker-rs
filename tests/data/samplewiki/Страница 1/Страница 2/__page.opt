@@ -1,0 +1,12 @@
+[General]
+tags = test
+type = text
+datetime = 2017-02-28 13:53:28.061902
+
+[Section1]
+param1 = абырвалг_1
+param2 = 666
+
+[Tree]
+expand = True
+

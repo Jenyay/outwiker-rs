@@ -1,0 +1,11 @@
+[Search]
+strategy = 0
+tags = 
+phrase = 
+
+[General]
+type = search
+order = 2
+tags = тест
+datetime = 2017-02-28 13:53:28.087903
+
