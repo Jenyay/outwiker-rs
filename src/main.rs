@@ -6,5 +6,5 @@ use ow_core::notetree::load_note_tree;
 
 fn main() {
     let wiki_path = Path::new("tests/data/samplewiki");
-    load_note_tree(wiki_path);
+    let note_tree = load_note_tree(wiki_path);
 }
