@@ -7,6 +7,7 @@ use std::rc::{Rc, Weak};
 pub struct Page {
     path: String,
     subpath: String,
+    title: String,
     uid: Option<String>,
     alias: Option<String>,
     icon: Option<String>,
@@ -20,9 +21,11 @@ impl Page {
     pub fn new(path: String, subpath: String, parent: Option<Weak<Page>>) -> Self {
         let tags = vec![];
         let children = RefCell::new(vec![]);
+        let title = Self::_get_title(&subpath);
         Page {
             path: path,
             subpath: subpath,
+            title: title,
             uid: None,
             alias: None,
             icon: None,
@@ -33,12 +36,24 @@ impl Page {
         }
     }
 
+    fn _get_title(subpath: &String) -> String {
+        let subpath_clear = if subpath.ends_with("/") { &subpath[..subpath.len() - 1].to_string() } else { subpath };
+        match subpath_clear.rfind("/") {
+            Some(pos) => subpath_clear[pos + 1..].to_string(),
+            None => String::from(subpath_clear)
+        }
+    }
+
     pub fn path(&self) -> &String {
         &self.path
     }
 
     pub fn subpath(&self) -> &String {
         &self.subpath
+    }
+
+    pub fn title(&self) -> &String {
+        &self.title
     }
 
     pub fn uid(&self) -> Option<&String> {
@@ -68,6 +83,10 @@ impl Page {
     pub fn children(&self) -> &RefCell<Vec<Rc<Page>>> {
         &self.children
     }
+
+    pub fn add_child(&self, page: Rc<Page>) {
+        self.children.borrow_mut().push(page);
+    }
 }
 
 #[derive(Debug)]
@@ -76,18 +95,11 @@ pub enum PageLoadingError {
     InvalidFormat,
 }
 
-fn _get_title(subpath: &String) -> String {
-    match subpath.rfind("/") {
-        Some(pos) => subpath[pos + 1..].to_string(),
-        None => String::from(subpath)
-    }
-}
-
-fn _load_note_tree(result: &mut Vec<Page>, current_path: &Path, root_path: &Path) {
+fn _load_note_tree(result: &mut Vec<Rc<Page>>, current_path: &Path, root_path: &Path, parent: Option<Weak<Page>>) {
     if let Ok(entries) = fs::read_dir(current_path) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_dir()  {
+            if path.is_dir() {
                 let abs_root_path = absolute(root_path).unwrap();
                 let abs_current_path = absolute(path.clone()).unwrap();
                 let root_len = abs_root_path.to_str().unwrap().len();
@@ -98,27 +110,27 @@ fn _load_note_tree(result: &mut Vec<Page>, current_path: &Path, root_path: &Path
                 }
 
                 let subpath = subpath_str.replace("\\", "/");
-                let title = _get_title(&subpath);
-
-                if !title.starts_with("__") {
-                    let page = Page::new(path.to_str().unwrap().to_string(), subpath, None);
-                    result.push(page);
+                let page = Page::new(path.to_str().unwrap().to_string(), subpath, parent.clone());
+                if !page.title().starts_with("__") {
+                    let rc_page = Rc::new(page);
+                    let weak_rc = Rc::downgrade(&rc_page);
+                    if let Some(ref option_parent_page) = parent {
+                        if let Some(parent_page) = option_parent_page.upgrade() {
+                            parent_page.add_child(Rc::clone(&rc_page));
+                        }
+                    }
+                    result.push(rc_page);
+                    _load_note_tree(result, &path, root_path, Some(weak_rc));
                 }
-                _load_note_tree(result, &path, root_path);
             }
         }
     }
 }
 
-pub fn load_note_tree(root_path: &Path) -> Result<Vec<String>, PageLoadingError> {
-    let mut result: Vec<Page> = vec![];
-    _load_note_tree(&mut result, root_path, root_path);
-
-    for page in result {
-        println!("{page:?}\n");
-    }
-
-    Err(PageLoadingError::NotFound)
+pub fn load_note_tree(root_path: &Path) -> Result<Vec<Rc<Page>>, PageLoadingError> {
+    let mut result: Vec<Rc<Page>> = vec![];
+    _load_note_tree(&mut result, root_path, root_path, None);
+    Ok(result)
 }
 
 #[cfg(test)]
