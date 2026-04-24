@@ -17,7 +17,6 @@ pub struct Page {
     icon: Option<String>,
     tags: Vec<String>,
     order: i32,
-    root: RefCell<Weak<WikiDocument>>,
     parent: RefCell<Option<Weak<Page>>>,
     children: RefCell<Vec<Rc<Page>>>,
 }
@@ -29,7 +28,7 @@ impl WikiDocument {
     }
 
     pub fn load_note_tree(&mut self, root_path: &str) -> Result<(), PageLoadingError> {
-        if let Ok(page_rc) = &self.page_engine.load_note_tree(root_path, self) {
+        if let Ok(page_rc) = &self.page_engine.load_note_tree(root_path) {
             self.pages.get_mut().clear();
             self.pages.get_mut().push(page_rc.clone());
             Result::Ok(())
@@ -46,7 +45,7 @@ impl WikiDocument {
 
 
 impl Page {
-    pub fn new(path: String, title: String, root: Weak<WikiDocument>, parent: Option<Weak<Page>>) -> Self {
+    pub fn new(path: String, title: String, parent: Option<Weak<Page>>) -> Self {
         let tags = vec![];
         let children = RefCell::new(vec![]);
         Page {
@@ -57,7 +56,6 @@ impl Page {
             icon: None,
             tags: tags,
             order: 0,
-            root: RefCell::new(root),
             parent: RefCell::new(parent),
             children: children,
         }
