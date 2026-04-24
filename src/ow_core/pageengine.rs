@@ -2,12 +2,12 @@ use std::{fs, io};
 use std::path::Path;
 use std::rc::{Rc, Weak};
 
-use crate::ow_core::notetree::{Page, PageLoadingError};
+use crate::ow_core::notetree::{Page, PageLoadingError, WikiDocument};
 
 pub trait PageEngine {
     fn get_context(&self, page: &Page) -> Result<String, io::Error>;
     fn load_params(&self, page: &mut Page);
-    fn load_note_tree(&self, root_path: &str) -> Result<Rc<Page>, PageLoadingError>;
+    fn load_note_tree(&self, root_path: &str, root: Weak<WikiDocument>) -> Result<Rc<Page>, PageLoadingError>;
 }
 
 struct FilesPageLoader{
@@ -35,10 +35,11 @@ impl FilesPageLoader {
         result: &mut Vec<Rc<Page>>,
         current_path: &str,
         root_path: &str,
+        root: Weak<WikiDocument>,
         parent: Option<Weak<Page>>,
     ) {
         let title = Self::_get_title(&String::from(current_path));
-        let page = Page::new(current_path.to_string(), title, parent.clone());
+        let page = Page::new(current_path.to_string(), title, root.clone(), parent.clone());
 
         let rc_page = Rc::new(page);
         if let Some(ref option_parent_page) = parent {
@@ -53,7 +54,7 @@ impl FilesPageLoader {
                 let path = entry.path();
                 if path.is_dir() && !path.to_str().unwrap().starts_with("__"){
                     let weak_rc = Rc::downgrade(result.last().unwrap());
-                    Self::_load_note_tree(result, &path.to_str().unwrap(), root_path, Some(weak_rc));
+                    Self::_load_note_tree(result, &path.to_str().unwrap(), root_path, root.clone(), Some(weak_rc));
                 }
             }
         }
@@ -70,9 +71,9 @@ impl PageEngine for FilesPageLoader {
     fn load_params(&self, page: &mut Page) {
     }
 
-    fn load_note_tree(&self, root_path: &str) -> Result<Rc<Page>, PageLoadingError> {
+    fn load_note_tree(&self, root_path: &str, root: Weak<WikiDocument>) -> Result<Rc<Page>, PageLoadingError> {
         let mut result: Vec<Rc<Page>> = vec![];
-        Self::_load_note_tree(&mut result, root_path, root_path, None);
+        Self::_load_note_tree(&mut result, root_path, root_path, root, None);
         Ok(result[0].clone())
     }
 }
