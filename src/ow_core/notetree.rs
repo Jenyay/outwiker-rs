@@ -1,8 +1,12 @@
 use std::cell::RefCell;
-use std::{fs};
-use std::path::Path;
 use std::rc::{Rc, Weak};
-use crate::ow_core::pageloader::PageLoader;
+
+use crate::ow_core::pageengine::PageEngine;
+
+pub struct WikiDocument {
+    page_engine: Box<dyn PageEngine>,
+    pages: RefCell<Vec<Rc<Page>>>,
+}
 
 #[derive(Debug)]
 pub struct Page {
@@ -15,6 +19,28 @@ pub struct Page {
     order: i32,
     parent: RefCell<Option<Weak<Page>>>,
     children: RefCell<Vec<Rc<Page>>>,
+}
+
+
+impl WikiDocument {
+    pub fn new(page_engine: Box<dyn PageEngine>) -> Self {
+        WikiDocument { page_engine: page_engine, pages: RefCell::new(Vec::new()) }
+    }
+
+    pub fn load_note_tree(&mut self, root_path: &str) -> Result<(), PageLoadingError> {
+        if let Ok(page_rc) = &self.page_engine.load_note_tree(root_path) {
+            self.pages.get_mut().clear();
+            self.pages.get_mut().push(page_rc.clone());
+            Result::Ok(())
+        }
+        else {
+            Result::Err(PageLoadingError::NotFound{})
+        }
+    }
+
+    pub fn pages(&self) -> &RefCell<Vec<Rc<Page>>> {
+        &self.pages
+    }
 }
 
 
@@ -86,51 +112,6 @@ pub enum PageLoadingError {
     InvalidFormat,
 }
 
-fn _get_title(path: &String) -> String {
-    let path_clear = if path.ends_with("/") {
-        &path[..path.len() - 1].to_string()
-    } else {
-        path
-    };
-    match path_clear.rfind("/") {
-        Some(pos) => path_clear[pos + 1..].to_string(),
-        None => String::from(path_clear),
-    }
-}
-
-fn _load_note_tree(
-    result: &mut Vec<Rc<Page>>,
-    current_path: &Path,
-    root_path: &Path,
-    parent: Option<Weak<Page>>,
-) {
-    if let Ok(entries) = fs::read_dir(current_path) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                let title = _get_title(&path.to_str().unwrap().to_string());
-                let page = Page::new(path.to_str().unwrap().to_string(), title, parent.clone());
-                if !page.title().starts_with("__") {
-                    let rc_page = Rc::new(page);
-                    let weak_rc = Rc::downgrade(&rc_page);
-                    if let Some(ref option_parent_page) = parent {
-                        if let Some(parent_page) = option_parent_page.upgrade() {
-                            parent_page.add_child(Rc::clone(&rc_page));
-                        }
-                    }
-                    result.push(rc_page);
-                    _load_note_tree(result, &path, root_path, Some(weak_rc));
-                }
-            }
-        }
-    }
-}
-
-pub fn load_note_tree(root_path: &Path) -> Result<Vec<Rc<Page>>, PageLoadingError> {
-    let mut result: Vec<Rc<Page>> = vec![];
-    _load_note_tree(&mut result, root_path, root_path, None);
-    Ok(result)
-}
 
 #[cfg(test)]
 mod tests {}
