@@ -5,7 +5,8 @@ use crate::ow_core::pageengine::PageEngine;
 
 pub struct WikiDocument {
     page_engine: Box<dyn PageEngine>,
-    pages: RefCell<Vec<Rc<Page>>>,
+    self_weak: Weak<RefCell<WikiDocument>>,
+    pages: Vec<Rc<RefCell<Page>>>,
 }
 
 #[derive(Debug)]
@@ -17,20 +18,23 @@ pub struct Page {
     icon: Option<String>,
     tags: Vec<String>,
     order: i32,
-    parent: RefCell<Option<Weak<Page>>>,
-    children: RefCell<Vec<Rc<Page>>>,
+    parent: Option<Weak<RefCell<Page>>>,
+    children: Vec<Rc<RefCell<Page>>>,
 }
 
 
 impl WikiDocument {
-    pub fn new(page_engine: Box<dyn PageEngine>) -> Self {
-        WikiDocument { page_engine: page_engine, pages: RefCell::new(Vec::new()) }
+    pub fn new(page_engine: Box<dyn PageEngine>) -> Rc<RefCell<Self>> {
+        let rc_document = Rc::new(RefCell::new(WikiDocument { page_engine: page_engine, self_weak: Weak::new(), pages: Vec::new() }));
+        let weak = Rc::downgrade(&rc_document);
+        rc_document.borrow_mut().self_weak = weak;
+        rc_document
     }
 
     pub fn load_note_tree(&mut self, root_path: &str) -> Result<(), PageLoadingError> {
         if let Ok(page_rc) = &self.page_engine.load_note_tree(root_path) {
-            self.pages.get_mut().clear();
-            self.pages.get_mut().push(page_rc.clone());
+            self.pages.clear();
+            self.pages.push(page_rc.clone());
             Result::Ok(())
         }
         else {
@@ -38,16 +42,16 @@ impl WikiDocument {
         }
     }
 
-    pub fn pages(&self) -> &RefCell<Vec<Rc<Page>>> {
+    pub fn pages(&self) -> &Vec<Rc<RefCell<Page>>> {
         &self.pages
     }
 }
 
 
 impl Page {
-    pub fn new(path: String, title: String, parent: Option<Weak<Page>>) -> Self {
+    pub fn new(path: String, title: String, parent: Option<Weak<RefCell<Page>>>) -> Self {
         let tags = vec![];
-        let children = RefCell::new(vec![]);
+        let children = vec![];
         Page {
             path: path,
             title: title,
@@ -56,7 +60,7 @@ impl Page {
             icon: None,
             tags: tags,
             order: 0,
-            parent: RefCell::new(parent),
+            parent: parent,
             children: children,
         }
     }
@@ -93,16 +97,16 @@ impl Page {
         self.order
     }
 
-    pub fn parent(&self) -> &RefCell<Option<Weak<Page>>> {
+    pub fn parent(&self) -> &Option<Weak<RefCell<Page>>> {
         &self.parent
     }
 
-    pub fn children(&self) -> &RefCell<Vec<Rc<Page>>> {
+    pub fn children(&self) -> &Vec<Rc<RefCell<Page>>> {
         &self.children
     }
 
-    pub fn add_child(&self, page: Rc<Page>) {
-        self.children.borrow_mut().push(page);
+    pub fn add_child(&mut self, page: &Rc<RefCell<Page>>) {
+        self.children.push(page.clone());
     }
 }
 

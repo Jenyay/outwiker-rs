@@ -9,10 +9,12 @@ fn main() {
     let wiki_path = Path::new("tests/data/samplewiki");
     let page_engine_factory = FilesPageEngineFactory::new();
     let page_engine = page_engine_factory.get_page_engine();
-    let mut document = WikiDocument::new(page_engine);
-    match document.load_note_tree(wiki_path.to_str().unwrap()) {
+    let document = WikiDocument::new(page_engine);
+    let laod_result = document.borrow_mut().load_note_tree(wiki_path.to_str().unwrap());
+    match laod_result {
         Ok(()) => {
-            let roots = document.pages();
+            let document_borrowed = document.borrow();
+            let roots = document_borrowed.pages();
             println!("{roots:?}");
         },
         Err(err) => {}
