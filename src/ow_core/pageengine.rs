@@ -11,28 +11,26 @@ pub trait PageEngine {
     fn load_note_tree(
         &self,
         root_path: &str,
-        //root: &Weak<RefCell<WikiDocument>>,
     ) -> Result<Rc<RefCell<Page>>, PageLoadingError>;
 }
 
 struct FilesPageLoader {
     context_file_name: String,
-    //self_weak: Weak<RefCell<Self>>,
+    self_weak: Weak<RefCell<Box<dyn PageEngine>>>,
 }
 
 impl FilesPageLoader {
-    pub fn new() -> Self {
-        //let rc_loader = Rc::new(RefCell::new(FilesPageLoader {
-        //    context_file_name: String::from("__page.text"),
-        //    self_weak: Weak::new(),
-        //}));
+    pub fn new() -> Rc<RefCell<Box<dyn PageEngine>>> {
+        let rc_loader = Rc::new_cyclic(|weak| {
+            let loader = FilesPageLoader {
+                context_file_name: String::from("__page.text"),
+                self_weak: weak.clone(),
+            };
+            let boxed: Box<dyn PageEngine> = Box::new(loader);
+            RefCell::new(boxed)
+        });
 
-        //let weak = Rc::downgrade(&rc_loader);
-        //rc_loader.borrow_mut().self_weak = weak;
-        //rc_loader
-        FilesPageLoader {
-            context_file_name: String::from("__page.text")
-        }
+        rc_loader
     }
 
     fn _get_title(path: &String) -> String {
@@ -48,14 +46,19 @@ impl FilesPageLoader {
     }
 
     fn _load_note_tree(
+        &self,
         result: &mut Vec<Rc<RefCell<Page>>>,
         current_path: &str,
         root_path: &str,
         parent: Option<Weak<RefCell<Page>>>,
-        //page_engine: &Weak<RefCell<Self>>,
     ) {
         let title = Self::_get_title(&String::from(current_path));
-        let page = Page::new(current_path.to_string(), title, parent.clone());
+        let page = Page::new(
+            self.self_weak.clone(),
+            current_path.to_string(),
+            title,
+            parent.clone(),
+        );
 
         let rc_page = Rc::new(RefCell::new(page));
         if let Some(weak_parent_page) = parent {
@@ -70,13 +73,7 @@ impl FilesPageLoader {
                 let path = entry.path();
                 if path.is_dir() && !path.to_str().unwrap().starts_with("__") {
                     let weak_rc = Rc::downgrade(result.last().unwrap());
-                    Self::_load_note_tree(
-                        result,
-                        &path.to_str().unwrap(),
-                        root_path,
-                        Some(weak_rc),
-                        //&page_engine.clone(),
-                    );
+                    self._load_note_tree(result, &path.to_str().unwrap(), root_path, Some(weak_rc));
                 }
             }
         }
@@ -91,20 +88,16 @@ impl PageEngine for FilesPageLoader {
 
     fn load_params(&self, page: &mut Page) {}
 
-    fn load_note_tree(
-        &self,
-        root_path: &str,
-        //root: &Weak<RefCell<WikiDocument>>,
-    ) -> Result<Rc<RefCell<Page>>, PageLoadingError> {
+    fn load_note_tree(&self, root_path: &str) -> Result<Rc<RefCell<Page>>, PageLoadingError> {
         let mut result = vec![];
-        Self::_load_note_tree(&mut result, root_path, root_path, None);
+        self._load_note_tree(&mut result, root_path, root_path, None);
         Ok(result[0].clone())
     }
 }
 
 // PageEngineFactory
 pub trait PageEngineFactory {
-    fn get_page_engine(&self) -> Box<dyn PageEngine>;
+    fn get_page_engine(&self) -> Rc<RefCell<Box<dyn PageEngine>>>;
 }
 
 pub struct FilesPageEngineFactory {}
@@ -116,7 +109,7 @@ impl FilesPageEngineFactory {
 }
 
 impl PageEngineFactory for FilesPageEngineFactory {
-    fn get_page_engine(&self) -> Box<dyn PageEngine> {
-        Box::new(FilesPageLoader::new())
+    fn get_page_engine(&self) -> Rc<RefCell<Box<dyn PageEngine>>> {
+        FilesPageLoader::new()
     }
 }
