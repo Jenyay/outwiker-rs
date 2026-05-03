@@ -1,23 +1,38 @@
 use std::cell::RefCell;
-use std::{fs, io};
 use std::path::Path;
 use std::rc::{Rc, Weak};
+use std::{fs, io};
 
 use crate::ow_core::notetree::{Page, PageLoadingError, WikiDocument};
 
 pub trait PageEngine {
     fn get_context(&self, page: &Page) -> Result<String, io::Error>;
     fn load_params(&self, page: &mut Page);
-    fn load_note_tree(&self, root_path: &str, root: &Weak<RefCell<WikiDocument>>) -> Result<Rc<RefCell<Page>>, PageLoadingError>;
+    fn load_note_tree(
+        &self,
+        root_path: &str,
+        root: &Weak<RefCell<WikiDocument>>,
+    ) -> Result<Rc<RefCell<Page>>, PageLoadingError>;
 }
 
-struct FilesPageLoader{
+struct FilesPageLoader {
     context_file_name: String,
+    //self_weak: Weak<RefCell<Self>>,
 }
 
 impl FilesPageLoader {
     pub fn new() -> Self {
-        FilesPageLoader { context_file_name: String::from("__page.text") }
+        //let rc_loader = Rc::new(RefCell::new(FilesPageLoader {
+        //    context_file_name: String::from("__page.text"),
+        //    self_weak: Weak::new(),
+        //}));
+
+        //let weak = Rc::downgrade(&rc_loader);
+        //rc_loader.borrow_mut().self_weak = weak;
+        //rc_loader
+        FilesPageLoader {
+            context_file_name: String::from("__page.text")
+        }
     }
 
     fn _get_title(path: &String) -> String {
@@ -36,11 +51,11 @@ impl FilesPageLoader {
         result: &mut Vec<Rc<RefCell<Page>>>,
         current_path: &str,
         root_path: &str,
-        root: &Weak<RefCell<WikiDocument>>,
         parent: Option<Weak<RefCell<Page>>>,
+        //page_engine: &Weak<RefCell<Self>>,
     ) {
         let title = Self::_get_title(&String::from(current_path));
-        let page = Page::new(root, current_path.to_string(), title, parent.clone());
+        let page = Page::new(current_path.to_string(), title, parent.clone());
 
         let rc_page = Rc::new(RefCell::new(page));
         if let Some(weak_parent_page) = parent {
@@ -53,15 +68,20 @@ impl FilesPageLoader {
         if let Ok(entries) = fs::read_dir(current_path) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.is_dir() && !path.to_str().unwrap().starts_with("__"){
+                if path.is_dir() && !path.to_str().unwrap().starts_with("__") {
                     let weak_rc = Rc::downgrade(result.last().unwrap());
-                    Self::_load_note_tree(result, &path.to_str().unwrap(), root_path, root, Some(weak_rc));
+                    Self::_load_note_tree(
+                        result,
+                        &path.to_str().unwrap(),
+                        root_path,
+                        Some(weak_rc),
+                        //&page_engine.clone(),
+                    );
                 }
             }
         }
     }
 }
-
 
 impl PageEngine for FilesPageLoader {
     fn get_context(&self, page: &Page) -> Result<String, io::Error> {
@@ -69,24 +89,25 @@ impl PageEngine for FilesPageLoader {
         fs::read_to_string(context_file)
     }
 
-    fn load_params(&self, page: &mut Page) {
-    }
+    fn load_params(&self, page: &mut Page) {}
 
-    fn load_note_tree(&self, root_path: &str, root: &Weak<RefCell<WikiDocument>>) -> Result<Rc<RefCell<Page>>, PageLoadingError> {
+    fn load_note_tree(
+        &self,
+        root_path: &str,
+        root: &Weak<RefCell<WikiDocument>>,
+    ) -> Result<Rc<RefCell<Page>>, PageLoadingError> {
         let mut result = vec![];
-        Self::_load_note_tree(&mut result, root_path, root_path, root, None);
+        Self::_load_note_tree(&mut result, root_path, root_path, None);
         Ok(result[0].clone())
     }
 }
-
 
 // PageEngineFactory
 pub trait PageEngineFactory {
     fn get_page_engine(&self) -> Box<dyn PageEngine>;
 }
 
-
-pub struct FilesPageEngineFactory{}
+pub struct FilesPageEngineFactory {}
 
 impl FilesPageEngineFactory {
     pub fn new() -> Self {
@@ -97,5 +118,5 @@ impl FilesPageEngineFactory {
 impl PageEngineFactory for FilesPageEngineFactory {
     fn get_page_engine(&self) -> Box<dyn PageEngine> {
         Box::new(FilesPageLoader::new())
-    }    
+    }
 }
