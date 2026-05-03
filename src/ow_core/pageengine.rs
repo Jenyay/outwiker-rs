@@ -3,31 +3,28 @@ use std::path::Path;
 use std::rc::{Rc, Weak};
 use std::{fs, io};
 
-use crate::ow_core::notetree::{Page, PageLoadingError, WikiDocument};
+use crate::ow_core::notetree::{Page, PageLoadingError};
 
 pub trait PageEngine {
     fn get_context(&self, page: &Page) -> Result<String, io::Error>;
     fn load_params(&self, page: &mut Page);
-    fn load_note_tree(
-        &self,
-        root_path: &str,
-    ) -> Result<Rc<RefCell<Page>>, PageLoadingError>;
+    fn load_note_tree(&self, root_path: &str) -> Result<Rc<RefCell<Page>>, PageLoadingError>;
 }
 
 struct FilesPageLoader {
     context_file_name: String,
-    self_weak: Weak<RefCell<Box<dyn PageEngine>>>,
+    self_weak: Weak<Box<dyn PageEngine>>,
 }
 
 impl FilesPageLoader {
-    pub fn new() -> Rc<RefCell<Box<dyn PageEngine>>> {
+    pub fn new() -> Rc<Box<dyn PageEngine>> {
         let rc_loader = Rc::new_cyclic(|weak| {
             let loader = FilesPageLoader {
                 context_file_name: String::from("__page.text"),
                 self_weak: weak.clone(),
             };
             let boxed: Box<dyn PageEngine> = Box::new(loader);
-            RefCell::new(boxed)
+            boxed
         });
 
         rc_loader
@@ -97,7 +94,7 @@ impl PageEngine for FilesPageLoader {
 
 // PageEngineFactory
 pub trait PageEngineFactory {
-    fn get_page_engine(&self) -> Rc<RefCell<Box<dyn PageEngine>>>;
+    fn get_page_engine(&self) -> Rc<Box<dyn PageEngine>>;
 }
 
 pub struct FilesPageEngineFactory {}
@@ -109,7 +106,7 @@ impl FilesPageEngineFactory {
 }
 
 impl PageEngineFactory for FilesPageEngineFactory {
-    fn get_page_engine(&self) -> Rc<RefCell<Box<dyn PageEngine>>> {
+    fn get_page_engine(&self) -> Rc<Box<dyn PageEngine>> {
         FilesPageLoader::new()
     }
 }

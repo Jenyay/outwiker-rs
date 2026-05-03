@@ -9,7 +9,7 @@ pub struct WikiDocument {
 
 #[derive(Debug)]
 pub struct Page {
-    page_engine: Weak<RefCell<Box<dyn PageEngine>>>,
+    page_engine: Weak<Box<dyn PageEngine>>,
     path: String,
     title: String,
     uid: Option<String>,
@@ -22,11 +22,10 @@ pub struct Page {
 }
 
 impl WikiDocument {
-    pub fn new() -> Rc<RefCell<Self>> {
-        let rc_document = Rc::new(RefCell::new(WikiDocument {
+    pub fn new() -> Self {
+        WikiDocument {
             root_page: None
-        }));
-        rc_document
+        }
     }
 
     pub fn root(&self) -> &Option<Rc<RefCell<Page>>> {
@@ -41,7 +40,7 @@ impl WikiDocument {
 
 impl Page {
     pub fn new(
-        page_engine: Weak<RefCell<Box<dyn PageEngine>>>,
+        page_engine: Weak<Box<dyn PageEngine>>,
         path: String,
         title: String,
         parent: Option<Weak<RefCell<Page>>>,
