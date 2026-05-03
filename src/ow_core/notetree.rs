@@ -47,7 +47,7 @@ impl WikiDocument {
 }
 
 pub fn load_note_tree(wiki_document: &Weak<RefCell<WikiDocument>>, page_engine: &dyn PageEngine, root_path: &str) -> Result<(), PageLoadingError> {
-    if let Ok(page_rc) = page_engine.load_note_tree(root_path, &wiki_document.clone()) {
+    if let Ok(page_rc) = page_engine.load_note_tree(root_path) {
         wiki_document.upgrade().unwrap().borrow_mut().set_root(page_rc);
         Result::Ok(())
     } else {

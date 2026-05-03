@@ -11,7 +11,7 @@ pub trait PageEngine {
     fn load_note_tree(
         &self,
         root_path: &str,
-        root: &Weak<RefCell<WikiDocument>>,
+        //root: &Weak<RefCell<WikiDocument>>,
     ) -> Result<Rc<RefCell<Page>>, PageLoadingError>;
 }
 
@@ -94,7 +94,7 @@ impl PageEngine for FilesPageLoader {
     fn load_note_tree(
         &self,
         root_path: &str,
-        root: &Weak<RefCell<WikiDocument>>,
+        //root: &Weak<RefCell<WikiDocument>>,
     ) -> Result<Rc<RefCell<Page>>, PageLoadingError> {
         let mut result = vec![];
         Self::_load_note_tree(&mut result, root_path, root_path, None);
