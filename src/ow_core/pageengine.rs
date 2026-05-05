@@ -3,12 +3,12 @@ use std::path::Path;
 use std::rc::{Rc, Weak};
 use std::{fs, io};
 
-use crate::ow_core::notetree::{Page, PageLoadingError};
+use crate::ow_core::notetree::{Page, PageLoadingError, WikiDocument};
 
 pub trait PageEngine {
     fn get_context(&self, page: &Page) -> Result<String, io::Error>;
     fn load_params(&self, page: &mut Page);
-    fn load_note_tree(&self, root_path: &str) -> Result<Rc<RefCell<Page>>, PageLoadingError>;
+    fn load_note_tree(&self, root_path: &str) -> Result<WikiDocument, PageLoadingError>;
 }
 
 struct FilesPageLoader {
@@ -85,10 +85,11 @@ impl PageEngine for FilesPageLoader {
 
     fn load_params(&self, page: &mut Page) {}
 
-    fn load_note_tree(&self, root_path: &str) -> Result<Rc<RefCell<Page>>, PageLoadingError> {
+    fn load_note_tree(&self, root_path: &str) -> Result<WikiDocument, PageLoadingError> {
         let mut result = vec![];
         self._load_note_tree(&mut result, root_path, root_path, None);
-        Ok(result[0].clone())
+        let root_page = result[0].clone();
+        Ok(WikiDocument::new(vec![root_page]))
     }
 }
 

@@ -11,8 +11,8 @@ pub fn load_note_tree(
     appliction: &mut Application,
     root_path: &str,
 ) -> Result<(), PageLoadingError> {
-    if let Ok(page_rc) = appliction.page_engine().load_note_tree(root_path) {
-        appliction.wiki_root().set_root(page_rc);
+    if let Ok(document) = appliction.page_engine().load_note_tree(root_path) {
+        appliction.set_document(document);
         Result::Ok(())
     } else {
         Result::Err(PageLoadingError::NotFound {})
@@ -29,9 +29,10 @@ fn main() {
     let load_result = load_note_tree(&mut application.borrow_mut(), wiki_path.to_str().unwrap());
     match load_result {
         Ok(()) => {
-            let mut app_borrowed = application.borrow_mut();
-            let roots = app_borrowed.wiki_root().root();
-            println!("{roots:?}");
+            let app_borrowed = application.borrow();
+            let document = app_borrowed.document();
+            let pages = document.as_ref().unwrap().pages();
+            println!("{pages:?}");
         }
         Err(err) => {}
     }

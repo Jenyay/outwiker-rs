@@ -4,7 +4,7 @@ use std::rc::{Rc, Weak};
 use crate::ow_core::pageengine::PageEngine;
 
 pub struct WikiDocument {
-    root_page: Option<Rc<RefCell<Page>>>,
+    pages: Vec<Rc<RefCell<Page>>>,
 }
 
 #[derive(Debug)]
@@ -22,18 +22,18 @@ pub struct Page {
 }
 
 impl WikiDocument {
-    pub fn new() -> Self {
+    pub fn new(pages: Vec<Rc<RefCell<Page>>>) -> Self {
         WikiDocument {
-            root_page: None
+            pages: pages
         }
     }
 
-    pub fn root(&self) -> &Option<Rc<RefCell<Page>>> {
-        &self.root_page
+    pub fn pages(&self) -> &Vec<Rc<RefCell<Page>>> {
+        &self.pages
     }
 
-    pub fn set_root(&mut self, root: Rc<RefCell<Page>>) {
-        self.root_page = Some(root);
+    pub fn set_pages(&mut self, root: Vec<Rc<RefCell<Page>>>) {
+        self.pages = root;
     }
 }
 
