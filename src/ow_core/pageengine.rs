@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::path::Path;
 use std::rc::{Rc, Weak};
+use std::str::FromStr;
 use std::{fs, io};
 
 use crate::ow_core::notetree::{Page, PageLoadingError, WikiDocument};
@@ -30,7 +31,7 @@ impl FilesPageLoader {
         rc_loader
     }
 
-    fn _get_title(path: &String) -> String {
+    fn _get_title(path: &str) -> String {
         let path_clear = if path.ends_with("/") {
             &path[..path.len() - 1].to_string()
         } else {
@@ -42,38 +43,48 @@ impl FilesPageLoader {
         }
     }
 
-    fn _load_note_tree(
+    fn _get_child_dirs(root_path: &str) -> Vec<String> {
+        let mut result = vec![];
+
+        if let Ok(entries) = fs::read_dir(root_path) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let path_str = path.to_str().unwrap();
+                let next_page_title = Self::_get_title(path_str);
+
+                if path.is_dir() && !next_page_title.starts_with("__") {
+                    result.push(String::from_str(path_str).unwrap());
+                }
+            }
+        }
+
+        result
+    }
+
+    fn _load_page(
         &self,
-        result: &mut Vec<Rc<RefCell<Page>>>,
-        current_path: &str,
         root_path: &str,
         parent: Option<Weak<RefCell<Page>>>,
-    ) {
-        let title = Self::_get_title(&String::from(current_path));
+        page_path: &str,
+    ) -> Option<Rc<RefCell<Page>>> {
+        let title = Self::_get_title(page_path);
         let page = Page::new(
             self.self_weak.clone(),
-            current_path.to_string(),
+            page_path.to_string(),
             title,
             parent.clone(),
         );
 
         let rc_page = Rc::new(RefCell::new(page));
-        if let Some(weak_parent_page) = parent {
-            if let Some(parent_page) = weak_parent_page.upgrade() {
-                parent_page.borrow_mut().add_child(&rc_page);
+        for path in Self::_get_child_dirs(page_path) {
+            if let Some(rc_child_page) =
+                self._load_page(root_path, Some(Rc::downgrade(&rc_page)), &path)
+            {
+                rc_page.borrow_mut().add_child(rc_child_page);
             }
         }
-        result.push(rc_page);
 
-        if let Ok(entries) = fs::read_dir(current_path) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() && !path.to_str().unwrap().starts_with("__") {
-                    let weak_rc = Rc::downgrade(result.last().unwrap());
-                    self._load_note_tree(result, &path.to_str().unwrap(), root_path, Some(weak_rc));
-                }
-            }
-        }
+        Some(rc_page)
     }
 }
 
@@ -86,10 +97,15 @@ impl PageEngine for FilesPageLoader {
     fn load_params(&self, page: &mut Page) {}
 
     fn load_note_tree(&self, root_path: &str) -> Result<WikiDocument, PageLoadingError> {
-        let mut result = vec![];
-        self._load_note_tree(&mut result, root_path, root_path, None);
-        let root_page = result[0].clone();
-        Ok(WikiDocument::new(vec![root_page]))
+        let mut root_pages: Vec<Rc<RefCell<Page>>> = vec![];
+
+        for path in Self::_get_child_dirs(root_path) {
+            if let Some(rc_page) = self._load_page(root_path, None, &path) {
+                root_pages.push(rc_page.clone());
+            }
+        }
+
+        Ok(WikiDocument::new(root_pages))
     }
 }
 

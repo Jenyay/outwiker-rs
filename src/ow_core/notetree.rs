@@ -101,8 +101,8 @@ impl Page {
         &self.children
     }
 
-    pub fn add_child(&mut self, page: &Rc<RefCell<Page>>) {
-        self.children.push(page.clone());
+    pub fn add_child(&mut self, rc_page: Rc<RefCell<Page>>) {
+        self.children.push(rc_page);
     }
 }
 
