@@ -17,7 +17,9 @@ pub struct Page {
     alias: Option<String>,
     icon: Option<String>,
     tags: Vec<String>,
-    order: i32,
+    order: Option<i32>,
+    creation_datetime: Option<String>,
+    edit_datetime: Option<String>,
     parent: Option<Weak<RefCell<Page>>>,
     children: Vec<Rc<RefCell<Page>>>,
 }
@@ -57,7 +59,9 @@ impl Page {
             alias: None,
             icon: None,
             tags: tags,
-            order: 0,
+            order: None,
+            creation_datetime: None,
+            edit_datetime: None,
             parent: parent,
             children: children,
         }
@@ -75,8 +79,12 @@ impl Page {
         &self.title
     }
 
-    pub fn uid(&self) -> Option<&String> {
-        self.uid.as_ref()
+    pub fn uid(&self) -> &Option<String> {
+        &self.uid
+    }
+
+    pub fn set_uid(&mut self, uid: Option<String>) {
+        self.uid = uid;
     }
 
     pub fn alias(&self) -> Option<&String> {
@@ -91,8 +99,12 @@ impl Page {
         &self.tags
     }
 
-    pub fn order(&self) -> i32 {
-        self.order
+    pub fn set_tags(&mut self, tags: Vec<String>) {
+        self.tags = tags;
+    }
+
+    pub fn order(&self) -> &Option<i32> {
+        &self.order
     }
 
     pub fn parent(&self) -> &Option<Weak<RefCell<Page>>> {
@@ -105,6 +117,14 @@ impl Page {
 
     pub fn add_child(&mut self, rc_page: Rc<RefCell<Page>>) {
         self.children.push(rc_page);
+    }
+
+    pub fn page_type(&self) -> &Option<String> {
+        &self.page_type
+    }
+
+    pub fn set_page_type(&mut self, page_type: Option<String>) {
+        self.page_type = page_type;
     }
 }
 

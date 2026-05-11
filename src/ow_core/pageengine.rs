@@ -1,10 +1,12 @@
+extern crate ini;
+
 use std::cell::RefCell;
 use std::path::Path;
 use std::rc::{Rc, Weak};
 use std::str::FromStr;
 use std::{fs, io};
-use serde::{Deserialize, Serialize};
-//use chrono::{DateTime, Local};
+
+use ini::{Ini, Properties};
 
 use crate::ow_core::notetree::{Page, PageLoadingError, WikiDocument};
 
@@ -20,27 +22,23 @@ struct FilesPageLoader {
     self_weak: Weak<Box<dyn PageEngine>>,
 }
 
-//#[derive(Debug, Serialize, Deserialize)]
-//struct TomlPageConfig {
-//    general: General,
-//}
-
-//#[derive(Debug, Serialize, Deserialize)]
-//struct General {
-//    #[serde(rename = "type")]
-//    type_field: Option<String>,
-//    datetime: Option<String>,
-//    cursorposition: Option<i64>,
-//    tags: Option<String>,
-//}
-
-
 impl FilesPageLoader {
+    const PARAMS_FILE_NAME: &str = "__page.opt";
+    const CONTEXT_FILE_NAME: &str = "__page.text";
+    const PARAMS_SECTION_GENERAL: &str = "General";
+    const PARAM_TYPE: &str = "type";
+    const PARAM_TAGS: &str = "tags";
+    const PARAM_UID: &str = "uid";
+    const PARAM_ICON: &str = "icon";
+    const PARAM_ORDER: &str = "order";
+    const PARAM_CREATION_DATETIME: &str = "creationdatetime";
+    const PARAM_EDIT_DATETIME: &str = "datetime";
+
     pub fn new() -> Rc<Box<dyn PageEngine>> {
         let rc_loader = Rc::new_cyclic(|weak| {
             let loader = FilesPageLoader {
-                params_file_name: String::from("__page.opt"),
-                context_file_name: String::from("__page.text"),
+                params_file_name: String::from(Self::PARAMS_FILE_NAME),
+                context_file_name: String::from(Self::CONTEXT_FILE_NAME),
                 self_weak: weak.clone(),
             };
             let boxed: Box<dyn PageEngine> = Box::new(loader);
@@ -113,6 +111,19 @@ impl FilesPageLoader {
             self.load_params(&mut rc_page.borrow_mut());
         }
     }
+
+    fn _parse_tags_string(tags_str: Option<&str>) -> Option<Vec<String>> {
+        Some(
+            tags_str?
+                .split(",")
+                .map(|item| String::from_str(&item.trim().to_lowercase()).unwrap())
+                .collect(),
+        )
+    }
+
+    fn _get_param_str(section: &Properties, param_name: &str) -> Option<String> {
+        Some(String::from_str(section.get(param_name)?.trim()).unwrap())
+    }
 }
 
 impl PageEngine for FilesPageLoader {
@@ -125,9 +136,15 @@ impl PageEngine for FilesPageLoader {
         let params_file_name = Path::new(page.path()).join(&self.params_file_name);
 
         match fs::read_to_string(params_file_name.to_str().unwrap()) {
-            Result::Ok(toml_text) => {
-                //let config: TomlPageConfig = toml::from_str(toml_text)?;
-            },
+            Result::Ok(ini_text) => {
+                let config = Ini::load_from_str(&ini_text).unwrap();
+                let general_section: &Properties = config.section(Some(Self::PARAMS_SECTION_GENERAL)).unwrap();
+                page.set_page_type(Self::_get_param_str(general_section, Self::PARAM_TYPE));
+                if let Some(tags) = Self::_parse_tags_string(general_section.get(Self::PARAM_TAGS)) {
+                    page.set_tags(tags);
+                }
+                page.set_uid(Self::_get_param_str(general_section, Self::PARAM_UID));
+            }
             Result::Err(err) => {}
         }
     }
