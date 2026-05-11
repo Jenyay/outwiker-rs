@@ -3,6 +3,8 @@ use std::path::Path;
 use std::rc::{Rc, Weak};
 use std::str::FromStr;
 use std::{fs, io};
+use serde::{Deserialize, Serialize};
+//use chrono::{DateTime, Local};
 
 use crate::ow_core::notetree::{Page, PageLoadingError, WikiDocument};
 
@@ -13,14 +15,31 @@ pub trait PageEngine {
 }
 
 struct FilesPageLoader {
+    params_file_name: String,
     context_file_name: String,
     self_weak: Weak<Box<dyn PageEngine>>,
 }
+
+//#[derive(Debug, Serialize, Deserialize)]
+//struct TomlPageConfig {
+//    general: General,
+//}
+
+//#[derive(Debug, Serialize, Deserialize)]
+//struct General {
+//    #[serde(rename = "type")]
+//    type_field: Option<String>,
+//    datetime: Option<String>,
+//    cursorposition: Option<i64>,
+//    tags: Option<String>,
+//}
+
 
 impl FilesPageLoader {
     pub fn new() -> Rc<Box<dyn PageEngine>> {
         let rc_loader = Rc::new_cyclic(|weak| {
             let loader = FilesPageLoader {
+                params_file_name: String::from("__page.opt"),
                 context_file_name: String::from("__page.text"),
                 self_weak: weak.clone(),
             };
@@ -66,6 +85,7 @@ impl FilesPageLoader {
         root_path: &str,
         parent: Option<Weak<RefCell<Page>>>,
         page_path: &str,
+        all_pages: &mut Vec<Rc<RefCell<Page>>>,
     ) -> Option<Rc<RefCell<Page>>> {
         let title = Self::_get_title(page_path);
         let page = Page::new(
@@ -76,15 +96,22 @@ impl FilesPageLoader {
         );
 
         let rc_page = Rc::new(RefCell::new(page));
+        all_pages.push(rc_page.clone());
         for path in Self::_get_child_dirs(page_path) {
             if let Some(rc_child_page) =
-                self._load_page(root_path, Some(Rc::downgrade(&rc_page)), &path)
+                self._load_page(root_path, Some(Rc::downgrade(&rc_page)), &path, all_pages)
             {
                 rc_page.borrow_mut().add_child(rc_child_page);
             }
         }
 
         Some(rc_page)
+    }
+
+    fn _load_pages_params(&self, all_pages: &mut Vec<Rc<RefCell<Page>>>) {
+        for rc_page in all_pages {
+            self.load_params(&mut rc_page.borrow_mut());
+        }
     }
 }
 
@@ -94,16 +121,28 @@ impl PageEngine for FilesPageLoader {
         fs::read_to_string(context_file)
     }
 
-    fn load_params(&self, page: &mut Page) {}
+    fn load_params(&self, page: &mut Page) {
+        let params_file_name = Path::new(page.path()).join(&self.params_file_name);
+
+        match fs::read_to_string(params_file_name.to_str().unwrap()) {
+            Result::Ok(toml_text) => {
+                //let config: TomlPageConfig = toml::from_str(toml_text)?;
+            },
+            Result::Err(err) => {}
+        }
+    }
 
     fn load_note_tree(&self, root_path: &str) -> Result<WikiDocument, PageLoadingError> {
         let mut root_pages: Vec<Rc<RefCell<Page>>> = vec![];
+        let mut all_pages: Vec<Rc<RefCell<Page>>> = vec![];
 
         for path in Self::_get_child_dirs(root_path) {
-            if let Some(rc_page) = self._load_page(root_path, None, &path) {
+            if let Some(rc_page) = self._load_page(root_path, None, &path, &mut all_pages) {
                 root_pages.push(rc_page.clone());
             }
         }
+
+        self._load_pages_params(&mut all_pages);
 
         Ok(WikiDocument::new(root_pages))
     }

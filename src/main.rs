@@ -48,6 +48,8 @@ fn main() {
             let document = app_borrowed.document();
             print_tree(&application.borrow().document().as_ref().unwrap());
         }
-        Err(err) => {}
+        Err(err) => {
+            println!("Error");
+        }
     }
 }
