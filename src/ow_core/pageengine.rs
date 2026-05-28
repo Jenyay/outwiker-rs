@@ -1,24 +1,22 @@
 extern crate ini;
 
-use std::cell::RefCell;
 use std::path::Path;
-use std::rc::{Rc, Weak};
+use std::sync::{Arc, Weak, RwLock};
 use std::str::FromStr;
+use std::thread::spawn;
 use std::{fs, io};
 
 use ini::{Ini, Properties};
 
-use crate::ow_core::notetree::{Page, PageLoadingError, WikiDocument};
+use crate::ow_core::notetree::{Page, PageLoadingError, WikiDocument, RcPage};
 
-pub trait PageEngine {
+pub trait PageEngine: Sync + Send {
     fn get_context(&self, page: &Page) -> Result<String, io::Error>;
     fn load_params(&self, page: &mut Page);
-    fn load_note_tree(&self, root_path: &str) -> Result<WikiDocument, PageLoadingError>;
+    fn load_note_tree(self, root_path: &str) -> Result<WikiDocument, PageLoadingError>;
 }
 
 struct FilesPageLoader {
-    params_file_name: String,
-    context_file_name: String,
     self_weak: Weak<Box<dyn PageEngine>>,
 }
 
@@ -34,11 +32,9 @@ impl FilesPageLoader {
     const PARAM_CREATION_DATETIME: &str = "creationdatetime";
     const PARAM_EDIT_DATETIME: &str = "datetime";
 
-    pub fn new() -> Rc<Box<dyn PageEngine>> {
-        let rc_loader = Rc::new_cyclic(|weak| {
+    pub fn new() -> Arc<Box<dyn PageEngine>> {
+        let rc_loader = Arc::new_cyclic(|weak| {
             let loader = FilesPageLoader {
-                params_file_name: String::from(Self::PARAMS_FILE_NAME),
-                context_file_name: String::from(Self::CONTEXT_FILE_NAME),
                 self_weak: weak.clone(),
             };
             let boxed: Box<dyn PageEngine> = Box::new(loader);
@@ -81,10 +77,10 @@ impl FilesPageLoader {
     fn _load_page(
         &self,
         root_path: &str,
-        parent: Option<Weak<RefCell<Page>>>,
+        parent: Option<Weak<RwLock<Page>>>,
         page_path: &str,
-        all_pages: &mut Vec<Rc<RefCell<Page>>>,
-    ) -> Option<Rc<RefCell<Page>>> {
+        all_pages: &mut Vec<RcPage>,
+    ) -> Option<RcPage> {
         let title = Self::_get_title(page_path);
         let page = Page::new(
             self.self_weak.clone(),
@@ -93,23 +89,75 @@ impl FilesPageLoader {
             parent.clone(),
         );
 
-        let rc_page = Rc::new(RefCell::new(page));
+        let rc_page = Arc::new(RwLock::new(page));
         all_pages.push(rc_page.clone());
         for path in Self::_get_child_dirs(page_path) {
             if let Some(rc_child_page) =
-                self._load_page(root_path, Some(Rc::downgrade(&rc_page)), &path, all_pages)
+                self._load_page(root_path, Some(Arc::downgrade(&rc_page)), &path, all_pages)
             {
-                rc_page.borrow_mut().add_child(rc_child_page);
+                rc_page.write().unwrap().add_child(rc_child_page);
             }
         }
 
         Some(rc_page)
     }
 
-    fn _load_pages_params(&self, all_pages: &mut Vec<Rc<RefCell<Page>>>) {
+    // Последовательная версия
+    fn _load_pages_params(&self, all_pages: &mut Vec<RcPage>) {
         for rc_page in all_pages {
-            self.load_params(&mut rc_page.borrow_mut());
+            self.load_params(&mut rc_page.write().unwrap());
         }
+    }
+
+    // Параллельная версия
+    fn _load_pages_params_parallel(self, all_pages: &mut Vec<RcPage>) {
+        let n_threads = 4;
+        if all_pages.is_empty() {
+            return;
+        }
+
+        let mut portions: Vec<Vec<RcPage>> = vec![];
+        let count = all_pages.len();
+
+        let portion_size: usize = if count <= n_threads {
+            1
+        } else {
+            count / n_threads
+        };
+
+        let mut start_index = 0;
+        for _ in 1..n_threads {
+            if start_index >= count {
+                break;
+            }
+
+            let end_index = if start_index + portion_size > count {
+                count
+            } else {
+                start_index + portion_size
+            };
+
+            portions.push(all_pages[start_index..end_index].to_vec());
+            start_index = end_index;
+        }
+
+        let mut threads = vec![];
+        let self_arc = Arc::new(self);
+
+        for mut portion in portions {
+            let self_clone = Arc::clone(&self_arc);
+            threads.push(
+                spawn(move || self_clone._load_pages_params(&mut portion))
+                );
+        }
+
+        for thread in threads {
+            thread.join().unwrap();
+        }
+        //
+        //for rc_page in all_pages {
+        //    self.load_params(&mut rc_page.borrow_mut());
+        //}
     }
 
     fn _parse_tags_string(tags_str: Option<&str>) -> Option<Vec<String>> {
@@ -128,19 +176,21 @@ impl FilesPageLoader {
 
 impl PageEngine for FilesPageLoader {
     fn get_context(&self, page: &Page) -> Result<String, io::Error> {
-        let context_file = Path::new(page.path()).join(&self.context_file_name);
+        let context_file = Path::new(page.path()).join(Self::CONTEXT_FILE_NAME);
         fs::read_to_string(context_file)
     }
 
     fn load_params(&self, page: &mut Page) {
-        let params_file_name = Path::new(page.path()).join(&self.params_file_name);
+        let params_file_name = Path::new(page.path()).join(Self::PARAMS_FILE_NAME);
 
         match fs::read_to_string(params_file_name.to_str().unwrap()) {
             Result::Ok(ini_text) => {
                 let config = Ini::load_from_str(&ini_text).unwrap();
-                let general_section: &Properties = config.section(Some(Self::PARAMS_SECTION_GENERAL)).unwrap();
+                let general_section: &Properties =
+                    config.section(Some(Self::PARAMS_SECTION_GENERAL)).unwrap();
                 page.set_page_type(Self::_get_param_str(general_section, Self::PARAM_TYPE));
-                if let Some(tags) = Self::_parse_tags_string(general_section.get(Self::PARAM_TAGS)) {
+                if let Some(tags) = Self::_parse_tags_string(general_section.get(Self::PARAM_TAGS))
+                {
                     page.set_tags(tags);
                 }
                 page.set_uid(Self::_get_param_str(general_section, Self::PARAM_UID));
@@ -149,9 +199,9 @@ impl PageEngine for FilesPageLoader {
         }
     }
 
-    fn load_note_tree(&self, root_path: &str) -> Result<WikiDocument, PageLoadingError> {
-        let mut root_pages: Vec<Rc<RefCell<Page>>> = vec![];
-        let mut all_pages: Vec<Rc<RefCell<Page>>> = vec![];
+    fn load_note_tree(self, root_path: &str) -> Result<WikiDocument, PageLoadingError> {
+        let mut root_pages: Vec<RcPage> = vec![];
+        let mut all_pages: Vec<RcPage> = vec![];
 
         for path in Self::_get_child_dirs(root_path) {
             if let Some(rc_page) = self._load_page(root_path, None, &path, &mut all_pages) {
@@ -159,7 +209,8 @@ impl PageEngine for FilesPageLoader {
             }
         }
 
-        self._load_pages_params(&mut all_pages);
+        //self._load_pages_params(&mut all_pages);
+        self._load_pages_params_parallel(&mut all_pages);
 
         Ok(WikiDocument::new(root_pages))
     }
@@ -167,7 +218,7 @@ impl PageEngine for FilesPageLoader {
 
 // PageEngineFactory
 pub trait PageEngineFactory {
-    fn get_page_engine(&self) -> Rc<Box<dyn PageEngine>>;
+    fn get_page_engine(&self) -> Arc<Box<dyn PageEngine>>;
 }
 
 pub struct FilesPageEngineFactory {}
@@ -179,7 +230,7 @@ impl FilesPageEngineFactory {
 }
 
 impl PageEngineFactory for FilesPageEngineFactory {
-    fn get_page_engine(&self) -> Rc<Box<dyn PageEngine>> {
+    fn get_page_engine(&self) -> Arc<Box<dyn PageEngine>> {
         FilesPageLoader::new()
     }
 }

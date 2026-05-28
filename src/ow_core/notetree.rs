@@ -1,11 +1,8 @@
-use std::cell::RefCell;
-use std::rc::{Rc, Weak};
+//use std::cell::RefCell;
+//use std::rc::{Rc, Weak};
+use std::sync::{Arc, Weak, RwLock};
 
 use crate::ow_core::pageengine::PageEngine;
-
-pub struct WikiDocument {
-    pages: Vec<Rc<RefCell<Page>>>,
-}
 
 #[derive(Debug)]
 pub struct Page {
@@ -20,22 +17,28 @@ pub struct Page {
     order: Option<i32>,
     creation_datetime: Option<String>,
     edit_datetime: Option<String>,
-    parent: Option<Weak<RefCell<Page>>>,
-    children: Vec<Rc<RefCell<Page>>>,
+    parent: Option<Weak<RwLock<Page>>>,
+    children: Vec<Arc<RwLock<Page>>>,
+}
+
+pub type RcPage = Arc<RwLock<Page>>;
+
+pub struct WikiDocument {
+    pages: Vec<RcPage>,
 }
 
 impl WikiDocument {
-    pub fn new(pages: Vec<Rc<RefCell<Page>>>) -> Self {
+    pub fn new(pages: Vec<RcPage>) -> Self {
         WikiDocument {
             pages: pages
         }
     }
 
-    pub fn pages(&self) -> &Vec<Rc<RefCell<Page>>> {
+    pub fn pages(&self) -> &Vec<RcPage> {
         &self.pages
     }
 
-    pub fn set_pages(&mut self, root: Vec<Rc<RefCell<Page>>>) {
+    pub fn set_pages(&mut self, root: Vec<RcPage>) {
         self.pages = root;
     }
 }
@@ -46,7 +49,7 @@ impl Page {
         page_engine: Weak<Box<dyn PageEngine>>,
         path: String,
         title: String,
-        parent: Option<Weak<RefCell<Page>>>,
+        parent: Option<Weak<RwLock<Page>>>,
     ) -> Self {
         let tags = vec![];
         let children = vec![];
@@ -107,15 +110,15 @@ impl Page {
         &self.order
     }
 
-    pub fn parent(&self) -> &Option<Weak<RefCell<Page>>> {
+    pub fn parent(&self) -> &Option<Weak<RwLock<Page>>> {
         &self.parent
     }
 
-    pub fn children(&self) -> &Vec<Rc<RefCell<Page>>> {
+    pub fn children(&self) -> &Vec<RcPage> {
         &self.children
     }
 
-    pub fn add_child(&mut self, rc_page: Rc<RefCell<Page>>) {
+    pub fn add_child(&mut self, rc_page: RcPage) {
         self.children.push(rc_page);
     }
 

@@ -1,14 +1,16 @@
 use crate::ow_core::{notetree::WikiDocument, pageengine::PageEngine};
-use std::{cell::RefCell, rc::Rc};
+//use std::{cell::RefCell, rc::Rc};
+use std::sync::Arc;
+use std::cell::RefCell;
 
 pub struct Application {
     document: Option<WikiDocument>,
-    page_engine: Rc<Box<dyn PageEngine>>,
+    page_engine: Arc<Box<dyn PageEngine>>,
 }
 
 impl Application {
-    pub fn new(page_engine: Rc<Box<dyn PageEngine>>) -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Application {
+    pub fn new(page_engine: Arc<Box<dyn PageEngine>>) -> Arc<RefCell<Self>> {
+        Arc::new(RefCell::new(Application {
             document: None,
             page_engine,
         }))
@@ -22,7 +24,7 @@ impl Application {
         self.document = Some(document)
     }
 
-    pub fn page_engine(&self) -> &Rc<Box<dyn PageEngine>> {
+    pub fn page_engine(&self) -> &Arc<Box<dyn PageEngine>> {
         &self.page_engine
     }
 }

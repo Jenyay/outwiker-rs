@@ -2,6 +2,7 @@ mod ow_core;
 
 use std::path::Path;
 use std::time::Instant;
+use std::sync::Arc;
 
 use ow_core::notetree::{PageLoadingError, Page};
 use ow_core::pageengine::{FilesPageEngineFactory, PageEngineFactory};
@@ -13,7 +14,8 @@ pub fn load_note_tree(
     appliction: &mut Application,
     root_path: &str,
 ) -> Result<(), PageLoadingError> {
-    if let Ok(document) = appliction.page_engine().load_note_tree(root_path) {
+    let page_engine = appliction.page_engine().clone();
+    if let Ok(document) = page_engine.load_note_tree(root_path) {
         appliction.set_document(document);
         Result::Ok(())
     } else {
@@ -28,12 +30,12 @@ fn print_tree(document: &WikiDocument) {
         let tags_str = page.tags().join(", ");
         println!("{title} {{{page_type:?}}} [{tags}]", title=page.title(), page_type=page.page_type(), tags=tags_str);
         for rc_page in page.children() {
-            print_page(&rc_page.borrow(), level + 1);
+            print_page(&rc_page.read().unwrap(), level + 1);
         }
     }
 
     for rc_page in document.pages() {
-        print_page(&rc_page.borrow(), 0);
+        print_page(&rc_page.read().unwrap(), 0);
     }
 }
 
