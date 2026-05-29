@@ -9,7 +9,7 @@ pub struct WikiDocument {
 
 #[derive(Debug)]
 pub struct Page {
-    page_engine: Weak<Box<dyn PageEngine>>,
+    page_engine: Weak<dyn PageEngine>,
     path: String,
     title: String,
     page_type: Option<String>,
@@ -26,9 +26,7 @@ pub struct Page {
 
 impl WikiDocument {
     pub fn new(pages: Vec<Rc<RefCell<Page>>>) -> Self {
-        WikiDocument {
-            pages: pages
-        }
+        WikiDocument { pages: pages }
     }
 
     pub fn pages(&self) -> &Vec<Rc<RefCell<Page>>> {
@@ -40,10 +38,9 @@ impl WikiDocument {
     }
 }
 
-
 impl Page {
     pub fn new(
-        page_engine: Weak<Box<dyn PageEngine>>,
+        page_engine: Weak<dyn PageEngine>,
         path: String,
         title: String,
         parent: Option<Weak<RefCell<Page>>>,
