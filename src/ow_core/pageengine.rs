@@ -17,8 +17,6 @@ pub trait PageEngine {
 }
 
 struct FilesPageLoader {
-    params_file_name: String,
-    context_file_name: String,
     self_weak: Weak<Box<dyn PageEngine>>,
 }
 
@@ -37,8 +35,6 @@ impl FilesPageLoader {
     pub fn new() -> Rc<Box<dyn PageEngine>> {
         let rc_loader = Rc::new_cyclic(|weak| {
             let loader = FilesPageLoader {
-                params_file_name: String::from(Self::PARAMS_FILE_NAME),
-                context_file_name: String::from(Self::CONTEXT_FILE_NAME),
                 self_weak: weak.clone(),
             };
             let boxed: Box<dyn PageEngine> = Box::new(loader);
@@ -128,12 +124,12 @@ impl FilesPageLoader {
 
 impl PageEngine for FilesPageLoader {
     fn get_context(&self, page: &Page) -> Result<String, io::Error> {
-        let context_file = Path::new(page.path()).join(&self.context_file_name);
+        let context_file = Path::new(page.path()).join(Self::CONTEXT_FILE_NAME);
         fs::read_to_string(context_file)
     }
 
     fn load_params(&self, page: &mut Page) {
-        let params_file_name = Path::new(page.path()).join(&self.params_file_name);
+        let params_file_name = Path::new(page.path()).join(Self::PARAMS_FILE_NAME);
 
         match fs::read_to_string(params_file_name.to_str().unwrap()) {
             Result::Ok(ini_text) => {
