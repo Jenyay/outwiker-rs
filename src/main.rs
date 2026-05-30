@@ -34,17 +34,18 @@ fn print_tree(document: &WikiDocument) {
             tags = tags_str
         );
         for rc_page in page.children() {
-            print_page(&rc_page.borrow(), level + 1);
+            print_page(&rc_page.read().unwrap(), level + 1);
         }
     }
 
     for rc_page in document.pages() {
-        print_page(&rc_page.borrow(), 0);
+        print_page(&rc_page.read().unwrap(), 0);
     }
 }
 
 fn main() {
-    let wiki_path = Path::new("tests/data/samplewiki");
+    //let wiki_path = Path::new("tests/data/samplewiki");
+    let wiki_path = Path::new("/home/jenyay/mount/zettelkasten/zettelkasten");
     let note_tree_engine: Box<dyn NoteTreeEngine> = Box::new(FilesNoteTreeEngine::new());
 
     let application = Application::new(note_tree_engine);
@@ -56,7 +57,7 @@ fn main() {
 
     match load_result {
         Ok(()) => {
-            print_tree(&application.borrow().document().as_ref().unwrap());
+            //print_tree(&application.borrow().document().as_ref().unwrap());
         }
         Err(err) => {
             println!("Error");
