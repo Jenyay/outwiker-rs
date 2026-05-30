@@ -1,8 +1,6 @@
 extern crate ini;
 
-//use std::cell::RefCell;
 use std::path::Path;
-//use std::rc::{Rc, Weak};
 use std::str::FromStr;
 use std::{fs, io};
 use std::sync::{Arc, RwLock, Weak};
@@ -102,14 +100,8 @@ impl FilesNoteTreeEngine {
         }
     }
 
-    //fn _load_pages_params(&self, all_pages: &mut Vec<RcPage>) {
-    //    for rc_page in all_pages {
-    //        self.page_engine.load_params(&mut rc_page.write().unwrap());
-    //    }
-    //}
-
-    fn _load_pages_params(page_engine: Arc<dyn PageEngine>, all_pages: &mut Vec<RcPage>) {
-        for rc_page in all_pages {
+    fn _load_pages_params(page_engine: Arc<dyn PageEngine>, pages: Vec<RcPage>) {
+        for rc_page in pages {
             page_engine.load_params(&mut rc_page.write().unwrap());
         }
     }
@@ -130,7 +122,7 @@ impl FilesNoteTreeEngine {
         };
 
         let mut start_index = 0;
-        for _ in 1..n_threads {
+        for _ in 0..n_threads {
             if start_index >= count {
                 break;
             }
@@ -146,23 +138,17 @@ impl FilesNoteTreeEngine {
         }
 
         let mut threads = vec![];
-        //let self_arc = Arc::new(self);
 
-        for mut portion in portions {
-            //let self_clone = Arc::clone(&self_arc);
+        for portion in portions {
             let page_engine = self.page_engine.clone();
             threads.push(
-                spawn(move || Self::_load_pages_params(page_engine, &mut portion))
+                spawn(|| Self::_load_pages_params(page_engine, portion))
                 );
         }
 
         for thread in threads {
             thread.join().unwrap();
         }
-        //
-        //for rc_page in all_pages {
-        //    self.load_params(&mut rc_page.borrow_mut());
-        //}
     }
     
 
